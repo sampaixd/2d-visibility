@@ -16,20 +16,35 @@ typedef struct rect_t
     bool isMoving;
 } rect_t;
 
-typedef struct corner_data_t
+typedef struct triangle_t
+{
+    Vector2 a;
+    Vector2 b;
+    Vector2 c;
+} triangle_t;
+
+typedef struct vertex_data_t
 {
     Vector2 pos;
     float distanceFromPlayer;
     float radian;
-    int rectIndex;
-} corner_data_t;
+} vertex_data_t;
 
-void DrawRays(Vector2 playerPos, corner_data_t *corners, int validCorners)
+typedef struct edge_t
 {
-    for (int i = 0; i < validCorners; i++)
+    vertex_data_t corner1;
+    vertex_data_t corner2;
+    int rectIndex;
+} edge_t;
+
+void DrawRays(Vector2 playerPos, edge_t *sides, int validSides)
+{
+    for (int i = 0; i < validSides; i++)
     {
-        DrawText(TextFormat("corner %d, rad: %.2f", i, corners[i].radian), corners[i].pos.x, corners[i].pos.y, 20, RED);
-        DrawLineV(playerPos, corners[i].pos, WHITE);
+        DrawText(TextFormat("corner %d, rad: %.2f", i, sides[i].corner1.radian), sides[i].corner1.pos.x, sides[i].corner1.pos.y, 20, RED);
+        DrawText(TextFormat("corner %d, rad: %.2f", i, sides[i].corner2.radian), sides[i].corner2.pos.x, sides[i].corner2.pos.y, 20, RED);
+        DrawLineV(playerPos, sides[i].corner1.pos, WHITE);
+        DrawLineV(playerPos, sides[i].corner2.pos, WHITE);
     }
 }
 
@@ -47,30 +62,34 @@ void DrawRects(rect_t *rects, int rectsPlaced)
     }
 }
 
-void CreateTrianglesFromRays(corner_data_t *corners, Vector2 playerPos, int rectsPlaced)
+void CreateTrianglesFromRays(vertex_data_t *corners, triangle_t *visibleTriangles, Vector2 playerPos, int validCorners, int *trianglesCount)
 {
 }
 
-void SwapCornerData(corner_data_t *corner1Data, corner_data_t *corner2Data)
+void SwapCornerData(vertex_data_t *corner1Data, vertex_data_t *corner2Data)
 {
-    corner_data_t corner1DataTemp = *corner1Data;
+    vertex_data_t corner1DataTemp = *corner1Data;
     *corner1Data = *corner2Data;
     *corner2Data = corner1DataTemp;
 }
 
-void SortCornersByDistanceFromPlayer(corner_data_t *corners, int rectsPlaced)
+void SortCornersByRadian(edge_t *sides, int validSides)
 {
-    for (int i = 0; i < (rectsPlaced * 4) + 4 - 1; i++)
+
+    for (int i = 0; i < validSides - 1; i++)
     {
+        float side1SmallestRadian = sides[i].corner1.radian < sides[i].corner2.radian ? sides[i].corner1.radian : sides[i].corner2.radian;   
         int minIndex = i;
-        for (int j = i + 1; j < (rectsPlaced * 4) + 4; j++)
+        for (int j = i + 1; j < validSides; j++)
         {
-            if (corners[j].distanceFromPlayer < corners[minIndex].distanceFromPlayer)
+            float side2SmallestRadian = 0;
+            if (side1SmallestRadian > side2SmallestRadian)
             {
                 minIndex = j;
+                side1SmallestRadian = side2SmallestRadian;
             }
         }
-        SwapCornerData(&corners[i], &corners[minIndex]);
+        SwapCornerData(&sides[i], &sides[minIndex]);
     }
 }
 
@@ -91,9 +110,8 @@ int GetPlayerRectOffset(float playerPos, float rectStart, float rectEnd)
     }
 }
 
-void GetCornerData(corner_data_t *corner, Vector2 playerPos, int rectIndex)
+void GetCornerData(vertex_data_t *corner, Vector2 playerPos, int rectIndex)
 {
-    corner->rectIndex = rectIndex;
 
     float dX = fabs(playerPos.x - corner->pos.x);
     float dY = fabs(playerPos.y - corner->pos.y);
@@ -108,7 +126,6 @@ void GetCornerData(corner_data_t *corner, Vector2 playerPos, int rectIndex)
     //  0 is top
     //  top right corner
     if (playerToCornerOffsetX <= 0 && playerToCornerOffsetY >= 0)
-    
     {
         corner->radian = radian;
     }
@@ -120,16 +137,16 @@ void GetCornerData(corner_data_t *corner, Vector2 playerPos, int rectIndex)
     // bottom left corner
     else if (playerToCornerOffsetX >= 0 && playerToCornerOffsetY <= 0)
     {
-        corner->radian = -(PI - radian);
+        corner->radian = PI + radian;
     }
     // top left corner
     else
     {
-        corner->radian = -radian;
+        corner->radian = (2 * PI) - radian;
     }
 }
 
-void GetCornerVectors(Vector2 playerPos, corner_data_t *corners, rect_t *rects, int rectsPlaced, int *validCorners)
+void GetCornerVectors(Vector2 playerPos, edge_t *sides, rect_t *rects, int rectsPlaced, int *validSides)
 {
 
     for (int i = 0; i < rectsPlaced; i++)
@@ -140,76 +157,63 @@ void GetCornerVectors(Vector2 playerPos, corner_data_t *corners, rect_t *rects, 
         switch (playerToRectPosY)
         {
         case 1:
-            corners[*validCorners].pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
-            GetCornerData(&corners[*validCorners], playerPos, i);
-            *validCorners += 1;
-            corners[*validCorners].pos = rects[i].endPos; // lower right corner
-            GetCornerData(&corners[*validCorners], playerPos, i);
-            *validCorners += 1;
+
+            sides[*validSides].corner1.pos = rects[i].endPos; // lower right corner
+            GetCornerData(&sides[*validSides].corner1, playerPos, i);
+
+            sides[*validSides].corner2.pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
+            GetCornerData(&sides[*validSides].corner2, playerPos, i);
+            *validSides += 1;
             break;
         case -1:
-            corners[*validCorners].pos = rects[i].startPos; // upper left corner
-            GetCornerData(&corners[*validCorners], playerPos, i);
-            *validCorners += 1;
-            corners[*validCorners].pos = (Vector2){rects[i].endPos.x, rects[i].startPos.y}; // upper right corner
-            GetCornerData(&corners[*validCorners], playerPos, i);
-            *validCorners += 1;
+            sides[*validSides].corner1.pos = rects[i].startPos; // upper left corner
+            GetCornerData(&sides[*validSides].corner1, playerPos, i);
+
+            sides[*validSides].corner2.pos = (Vector2){rects[i].endPos.x, rects[i].startPos.y}; // upper right corner
+            GetCornerData(&sides[*validSides].corner2, playerPos, i);
+            *validSides += 1;
             break;
         }
 
         switch (playerToRectPosX)
         {
         case 1:
-            // if two sides are visible, this will stop their common corner to be selected twice
-            if (playerToRectPosY == 1)
-            {
-                corners[*validCorners].pos = (Vector2){rects[i].endPos.x, rects[i].startPos.y}; // upper right corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
-            else if (playerToRectPosY == -1)
-            {
-                corners[*validCorners].pos = rects[i].endPos; // lower right corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
-            else
-            {
-                corners[*validCorners].pos = (Vector2){rects[i].endPos.x, rects[i].startPos.y}; // upper right corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-                corners[*validCorners].pos = rects[i].endPos; // lower right corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
+            sides[*validSides].corner1.pos = (Vector2){rects[i].endPos.x, rects[i].startPos.y}; // upper right corner
+            GetCornerData(&sides[*validSides].corner1, playerPos, i);
+            sides[*validSides].corner2.pos = rects[i].endPos; // lower right corner
+            GetCornerData(&sides[*validSides].corner2, playerPos, i);
+            *validSides += 1;
+
             break;
 
         case -1:
-            if (playerToRectPosY == 1)
-            {
-                corners[*validCorners].pos = rects[i].startPos; // upper left corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
-            else if (playerToRectPosY == -1)
-            {
-                corners[*validCorners].pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
-            else
-            {
-                corners[*validCorners].pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-                corners[*validCorners].pos = rects[i].startPos; // upper left corner
-                GetCornerData(&corners[*validCorners], playerPos, i);
-                *validCorners += 1;
-            }
+
+            sides[*validSides].corner1.pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
+            GetCornerData(&sides[*validSides].corner1, playerPos, i);
+
+            sides[*validSides].corner2.pos = rects[i].startPos; // upper left corner
+            GetCornerData(&sides[*validSides].corner2, playerPos, i);
+            *validSides += 1;
+
             break;
         }
     }
-    corners[*validCorners].pos = (Vector2){0, 0}; // upper left corner
+    Vector2 upperRight = {screenWidth, 0};
+    Vector2 lowerRight = {screenWidth, screenHeight};
+    Vector2 lowerLeft = {0, screenHeight};
+    Vector2 upperLeft = {0, 0};
+
+    Vector2 mapCorners[] = {upperRight, lowerRight, lowerLeft, upperLeft};
+
+    for (int i = 0; i < 4; i++)
+    {
+        sides[*validSides].corner1.pos = mapCorners[i];
+        GetCornerData(&sides[*validSides].corner1, playerPos, rectsPlaced);
+        sides[*validSides].corner2.pos = mapCorners[(i + 1) % 4];
+        GetCornerData(&sides[*validSides].corner2, playerPos, rectsPlaced);
+        *validSides += 1;
+    }
+    /*corners[*validCorners].pos = (Vector2){0, 0}; // upper left corner
     GetCornerData(&corners[*validCorners], playerPos, rectsPlaced);
     *validCorners += 1;
     corners[*validCorners].pos = (Vector2){screenWidth, 0}; // upper right corner
@@ -221,7 +225,7 @@ void GetCornerVectors(Vector2 playerPos, corner_data_t *corners, rect_t *rects, 
     corners[*validCorners].pos = (Vector2){screenWidth, screenHeight}; // lower right corner
     GetCornerData(&corners[*validCorners], playerPos, rectsPlaced);
     *validCorners += 1;
-    return;
+    return;*/
 }
 
 bool MouseIsInsideObject(Vector2 mousePos, rect_t rect)
@@ -281,20 +285,23 @@ int main()
     Vector2 playerPos = {screenWidth / 2, screenHeight / 2};
     rect_t rects[maxRects] = {0};
     int rectsPlaced = 0;
-    corner_data_t corners[maxRects * 4 + 4] = {0}; // stores all corners on the map, including map borders
-    int validCorners = 0;
+    edge_t edges[maxRects * 4 + 4] = {0}; // stores all sides on the map, including map border sides
+    int edgesCount = 0;
+    triangle_t visibleTriangles[maxRects * 4] = {0}; // unsure if this will be sufficient memory, if seg faults happen check this value
+    int trianglesCount = 0;
     Vector2 mouseToRectStartDistance = {0, 0};
     Vector2 mouseToRectEndDistance = {0, 0};
     rect_t testRect = {(Vector2){200, 200},
                        (Vector2){500, 500}};
     PlaceRect(rects, testRect, &rectsPlaced);
-    rect_t testRect2 = {(Vector2){1000, 700},
-                        (Vector2){1200, 800}};
+    rect_t testRect2 = {(Vector2){1200, 1000},
+                        (Vector2){1500, 1300}};
     PlaceRect(rects, testRect2, &rectsPlaced);
 
     while (!WindowShouldClose())
     {
-        validCorners = 0;
+
+        edgesCount = 0;
         ClearBackground(BLACK);
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
         {
@@ -304,13 +311,14 @@ int main()
         {
             RemoveRectMovement(rects, rectsPlaced);
         }
-        GetCornerVectors(playerPos, corners, rects, rectsPlaced, &validCorners);
-        SortCornersByDistanceFromPlayer(corners, rectsPlaced);
+        GetCornerVectors(playerPos, edges, rects, rectsPlaced, &edgesCount);
+        SortCornersByRadian(edges, edgesCount);
+        // CreateTrianglesFromRays(sides, visibleTriangles, playerPos, validSides, &trianglesCount);
         BeginDrawing();
 
         DrawCircleV(playerPos, playerSize, YELLOW);
         DrawRects(rects, rectsPlaced);
-        DrawRays(playerPos, corners, validCorners);
+        DrawRays(playerPos, edges, edgesCount);
         EndDrawing();
     }
     CloseWindow();
