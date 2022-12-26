@@ -1,6 +1,8 @@
 #include "raylib.h"
 #include <math.h>
 
+// #define DEV_MODE  // comment out to disable dev mode
+
 const int screenWidth = 1280;
 const int screenHeight = 720;
 const int targetFPS = 60;
@@ -66,11 +68,15 @@ void DrawVisibleTriangles(triangle_t *triangles, int trianglesCount)
 {
     for (int i = 0; i < trianglesCount; i++)
     {
-        DrawTriangle(triangles[i].a, triangles[i].b, triangles[i].c, colors[i]);
+#ifdef DEV_MODE
+        DrawTriangle(triangles[i].a, triangles[i].b, triangles[i].c, triangles[i].rectIndex);
         DrawTriangleLines(triangles[i].a, triangles[i].b, triangles[i].c, triangles[i].rectIndex);
         DrawText(TextFormat("rectangle asociated: %d", triangles[i].rectIndex), triangles[i].b.x, triangles[i].b.y, 20, triangles[i].rectIndex);
+        DrawText(TextFormat("triangles present: %d", trianglesCount), screenWidth / 2, screenHeight / 2, 20, WHITE);
+#else
+        DrawTriangle(triangles[i].a, triangles[i].b, triangles[i].c, BLACK);
+#endif
     }
-    DrawText(TextFormat("triangles present: %d", trianglesCount), screenWidth / 2, screenHeight / 2, 20, WHITE);
 }
 
 void DrawRays(Vector2 playerPos, edge_t *sides, int validSides)
@@ -198,28 +204,26 @@ void AddHiddenRectangle(edge_t edge, Vector2 playerPos, triangle_t *hiddenTriang
     Vector2 vertex1WallCollision = GetWallCollision(edge.vertex1, playerPos);
     Vector2 vertex2WallCollision = GetWallCollision(edge.vertex2, playerPos);
     // if they are on opposide side of each other left/right
-    /*if (fabs(vertex1WallCollision.x - vertex2WallCollision.x) == screenWidth)
+    if (fabs(vertex1WallCollision.x - vertex2WallCollision.x) == screenWidth)
     {
         // if cone goes downwards
-        if (edge.vertex1.radian > PI / 2 && edge.vertex1.radian < PI)
+        if (edge.vertex1.radian > PI / 2)
         {
             Vector2 leftBotCorner = {0, screenHeight};
             Vector2 rightBotCorner = {screenWidth, screenHeight};
-            hiddenTriangles[*trianglesCount] = (triangle_t){rightBotCorner, vertex1WallCollision, vertex2WallCollision, RED};
+            hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, leftBotCorner, vertex2WallCollision, RED};
             *trianglesCount += 1;
             hiddenTriangles[*trianglesCount] = (triangle_t){leftBotCorner, rightBotCorner, vertex2WallCollision, BLUE};
             *trianglesCount += 1;
-
         }
         else
         {
             Vector2 leftTopCorner = {0, 0};
             Vector2 rightTopCorner = {screenWidth, 0};
-            hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, leftTopCorner, vertex2WallCollision, RED};
+            hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, rightTopCorner, vertex2WallCollision, RED};
             *trianglesCount += 1;
             hiddenTriangles[*trianglesCount] = (triangle_t){vertex2WallCollision, rightTopCorner, leftTopCorner, BLUE};
             *trianglesCount += 1;
-
         }
     }
     // if they are on opposide side of each other top/bot
@@ -230,33 +234,31 @@ void AddHiddenRectangle(edge_t edge, Vector2 playerPos, triangle_t *hiddenTriang
         {
             Vector2 rightTopCorner = {screenWidth, 0};
             Vector2 rightBotCorner = {screenWidth, screenHeight};
-            hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, vertex2WallCollision, rightTopCorner, RED};
+            hiddenTriangles[*trianglesCount] = (triangle_t){rightTopCorner, vertex2WallCollision, vertex1WallCollision, RED};
             *trianglesCount += 1;
-            hiddenTriangles[*trianglesCount] = (triangle_t){vertex2WallCollision, rightTopCorner, rightBotCorner, BLUE};
+            hiddenTriangles[*trianglesCount] = (triangle_t){rightTopCorner, vertex1WallCollision, rightBotCorner, BLUE};
             *trianglesCount += 1;
-
         }
         else
         {
             Vector2 leftTopCorner = {0, 0};
             Vector2 leftBotCorner = {0, screenHeight};
-            hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, vertex2WallCollision, leftTopCorner, RED};
+            hiddenTriangles[*trianglesCount] = (triangle_t){leftTopCorner, vertex2WallCollision, vertex1WallCollision, RED};
             *trianglesCount += 1;
-            hiddenTriangles[*trianglesCount] = (triangle_t){vertex2WallCollision, leftBotCorner, leftTopCorner, BLUE};
+            hiddenTriangles[*trianglesCount] = (triangle_t){leftBotCorner, vertex2WallCollision, leftTopCorner, BLUE};
             *trianglesCount += 1;
-
         }
     }
     // if they are on different sides of the screen (not adjacent)
     else if (vertex1WallCollision.x != vertex2WallCollision.x && vertex1WallCollision.y != vertex2WallCollision.y)
     {
         Vector2 corner = GetCornerBetweenWallIntersects(vertex1WallCollision, vertex2WallCollision);
-        hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, vertex2WallCollision, corner, RED};
+        hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, corner, vertex2WallCollision, RED};
         *trianglesCount += 1;
-    }*/
-    hiddenTriangles[*trianglesCount] = (triangle_t){vertex1WallCollision, edge.vertex1.pos, edge.vertex2.pos, YELLOW};
+    }
+    hiddenTriangles[*trianglesCount] = (triangle_t){edge.vertex2.pos, edge.vertex1.pos, vertex1WallCollision, YELLOW};
     *trianglesCount += 1;
-    hiddenTriangles[*trianglesCount] = (triangle_t){edge.vertex2.pos, vertex2WallCollision, vertex1WallCollision, PURPLE};
+    hiddenTriangles[*trianglesCount] = (triangle_t){vertex2WallCollision, edge.vertex2.pos, vertex1WallCollision, PURPLE};
     *trianglesCount += 1;
 }
 
@@ -471,7 +473,6 @@ void GetCornerVectors(Vector2 playerPos, edge_t *sides, rect_t *rects, int rects
 
             sides[*validSides].vertex1.pos = (Vector2){rects[i].startPos.x, rects[i].endPos.y}; // lower left corner
             GetCornerData(&sides[*validSides].vertex1, playerPos, i);
-
             sides[*validSides].vertex2.pos = rects[i].startPos; // upper left corner
             GetCornerData(&sides[*validSides].vertex2, playerPos, i);
             *validSides += 1;
@@ -547,7 +548,7 @@ void PlaceRect(rect_t *rects, rect_t placedRect, int *rectsPlaced)
 
 int main()
 {
-    InitWindow(screenWidth * 1.2, screenHeight * 1.2, "2d visibility");
+    InitWindow(screenWidth, screenHeight, "2d visibility");
     SetTargetFPS(targetFPS);
 
     Vector2 playerPos = {screenWidth / 2, screenHeight / 2};
@@ -562,15 +563,15 @@ int main()
     rect_t testRect = {(Vector2){200, 200},
                        (Vector2){500, 500}};
     PlaceRect(rects, testRect, &rectsPlaced);
-    /*rect_t testRect2 = {(Vector2){1200, 1000},
-                        (Vector2){1500, 1300}};
-    PlaceRect(rects, testRect2, &rectsPlaced);*/
+    rect_t testRect2 = {(Vector2){700, 700},
+                        (Vector2){1000, 800}};
+    PlaceRect(rects, testRect2, &rectsPlaced);
     while (!WindowShouldClose())
     {
         triangle_t visibleTriangles[maxRects * 4] = {0}; // unsure if this will be sufficient memory, if seg faults happen check this value
         edgesCount = 0;
         trianglesCount = 0;
-        ClearBackground(BLACK);
+        ClearBackground(LIGHTGRAY);
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
         {
             MoveObjectOrPlayer(&playerPos, rects, rectsPlaced, &mouseToRectStartDistance, &mouseToRectEndDistance);
@@ -591,9 +592,11 @@ int main()
         BeginDrawing();
 
         DrawRects(rects, rectsPlaced);
+#ifdef DEV_MODE
         DrawRays(playerPos, edges, edgesCount);
-        DrawVisibleTriangles(visibleTriangles, trianglesCount);
         DrawMapCorners();
+#endif
+        DrawVisibleTriangles(visibleTriangles, trianglesCount);
         DrawCircleV(playerPos, playerSize, YELLOW);
         EndDrawing();
         for (int i = 0; i < edgesCount; i++)
